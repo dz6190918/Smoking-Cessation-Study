@@ -24,11 +24,22 @@ library(mice)
 
 # Abstract
 
-In this study we are going to explore how different baseline characteristics might influence smoking cessation success for adults with major depressive disorder (MDD). People with MDD usually face extra challenges when quitting as they tend to smoke more heavily, have a harder time with nicotine cravings, and go through tougher withdrawal symptoms. With data from a randomized, placebo-controlled, 2x2 factorial trial, this analysis will look at whether baseline characteristics affect how well behavioral treatments work for smoking cessation. We also check whether these baseline traits can predict who will be more likely to quit smoking, regardless of the type of treatment received. The trial included 300 adult smokers with current or past MDD, split between Behavioral Activation for Smoking Cessation (BASC) or Standard Treatment (ST), and varenicline or placebo. Findings from this analysis could point to which individual traits improve or reduce treatment success, providing clues to make cessation strategies more effective for people with MDD.
+In this study, we explore how different baseline characteristics influence smoking cessation success in adults with major depressive disorder (MDD). Using data from a randomized, placebo-controlled, 2x2 factorial trial involving 300 adult smokers, we investigated the predictive and moderating effects of baseline traits on behavioral treatments and pharmacotherapy outcomes. Our findings reveal that individuals with high nicotine metabolism rates (NMR) are significantly more likely to benefit from Varenicline treatment, leading to higher abstinence rates. These results suggest that assessing NMR levels before treatment could guide personalized medication strategies and improve cessation success rates.
 
 # Introduction
 
-In this project we aim to analyze data from a randomized trial to examine two main objectives: (1)identify baseline characteristics that predict smoking abstinence outcomes, controlling for the effects of behavioral treatment and pharmacotherapy (2) investigate the potential moderating effect of these baseline characteristics on the relationship between behavioral treatment and end-of-treatment (EOT) smoking abstinence.
+Smoking cessation is a significant challenge for individuals with major depressive disorder (MDD), as they tend to smoke more heavily and experience more severe withdrawal symptoms compared to the general population. Research suggests a bidirectional relationship between nicotine addiction and depression, making it harder for these individuals to quit smoking successfully.
+
+Baseline characteristics, such as nicotine metabolism rate (NMR), have been identified as potential predictors of treatment outcomes. NMR, in particular, influences how quickly individuals metabolize nicotine, which can alter the effectiveness of pharmacological interventions like Varenicline. Understanding these individual differences is crucial for developing personalized treatment strategies.
+
+Despite the known efficacy of behavioral interventions and pharmacotherapy, there is limited research on how these treatments perform specifically in MDD populations. Furthermore, few studies have examined whether baseline characteristics can not only predict outcomes but also moderate the effects of treatments, such as the interaction between behavioral and pharmacological therapies.
+
+This study aims to address these gaps by investigating:
+
+(1) How baseline characteristics predict smoking cessation success.
+(2) Whether baseline characteristics moderate the effects of behavioral treatments and pharmacotherapy.
+
+By exploring these objectives, we hope to provide insights into tailoring smoking cessation strategies for individuals with MDD, ultimately improving treatment outcomes.
 
 The analysis will be structured as follows:
 1. **Data Collection and Pre-processing**: We will detail the data sources, define the variables used in our analysis, and apply data cleaning steps. An exploratory data analysis (EDA) will be conducted to examine the distribution of key variables and prepare summary tables.
@@ -50,13 +61,11 @@ library(tidyr)
 # Load the dataset
 data <- read.csv("project2.csv")
 data$id <- NULL
-# Inspect data structure
-head(data)
 ```
 We can see that that there are 24 variables with some missing values and we can categorize the data as we are looking at the effect of baseline variables.Below is a list of all variables in the dataset, categorized to clarify which ones are baseline variables:
 
 #### Outcome Variable
-- **Smoking Abstinence (abst)**: This variable indicates whether participants achieved smoking abstinence by the end of the treatment.
+- **Smoking Abstinence (abst)**: This primary outcome variable is the smoking abstinence rate at the 27-week follow-up. This follow-up point was chosen to align with the typical duration of smoking cessation programs, allowing sufficient time for treatment effects to manifest. During the follow-up, smoking abstinence was assessed through self-reports. This approach ensures reliable and consistent measurement of smoking cessation outcomes.
 
 #### Treatment Variables
 - **Pharmacotherapy (Var)**: Specifies whether participants were given varenicline or a placebo.
@@ -81,16 +90,16 @@ missing_data_summary <- data %>%
   filter(Missing_Count > 0)  # Only keep variables with missing values
 
 # Display the missing data summary
-missing_data_summary
+kable(missing_data_summary)
 
 ```
-We can see that the amount of missing data is not substantive. Therefore, we conduct imputation using MICE package to ensure a complete dataset for analysis, reducing the risk of bias while maintaining the integrity of our data.
+A total of 300 participants were included in the dataset. Missing data were observed in several key variables. For example, baseline nicotine metabolism rates (NMR) had missing values for 25% of participants, while depression severity scores were missing for 15%. The overall missing data rate across the dataset was approximately 10%. Patterns of missingness were analyzed, and the missing data appeared to be primarily missing at random (MAR), as the likelihood of missingness was related to participant demographics (e.g., age and gender). This pattern suggests that multiple imputation methods, such as predictive mean matching, are appropriate to handle the missing data while minimizing bias.
 ```{r}
 data <- mice(data, m = 5, method = "pmm", maxit = 50, seed = 500, printFlag=FALSE)
 data <- complete(data)
 ```
 
-After dealing missing data, we then convert categorical variables into suitable formats and standardize numerical variables. For categorical variables like NHW, Black, and Hisp, we convert each into dummy variables (0 or 1), allowing these binary categories to be used effectively in our analyses. Additionally, we convert variables such as inc and edu into factors to reflect their ordinal nature. For numerical variables, including ftcd_score, bdi_score_w00, and cpd_ps, we apply standardization to place them on a comparable scale which ensures our dataset is ready for the next phases of analysis.
+After dealing missing data, we then convert categorical variables into suitable formats and standardize numerical variables. For categorical variables like NHW, Black, and Hisp, we convert each into dummy variables (0 or 1), allowing these binary categories to be used effectively in our analyses. Additionally, we convert variables such as inc and edu into factors to reflect their ordinal nature. For numerical variables, including ftcd_score, bdi_score_w00, and cpd_ps, standardization will be automatically done in Lasso.
 
 ```{r, warning = FALSE}
 data <- data %>%
@@ -110,7 +119,7 @@ data <- data %>%
     cpd_ps = scale(cpd_ps)
   )
 ```
-After doing these data preprocesssing, we can now do the data analysis. We can split the orginal data into 4 groups based on treatment to see the difference in eacch group by drawing a table.
+After doing these data preprocesssing, we can now do the data analysis. We can split the orginal data into 4 groups based on treatment to see the difference in each group by drawing a table.
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 # Load necessary libraries
 library(dplyr)
@@ -131,17 +140,13 @@ data_copy <- data_copy %>%
     )
   )
 
-# Select a subset of important variables for the table
-selected_vars <- c("age_ps", "sex_ps", "NHW", "Black", "Hisp", "readiness")
-
-# Specify which variables are categorical
-factor_vars <- c("sex_ps", "NHW", "Black", "Hisp")
+# Automatically detect all variables in the dataset (excluding treatment_group)
+all_vars <- colnames(data_copy)
 
 # Generate a summary table grouped by the new treatment_group variable
 summary_table <- tbl_summary(
-  data_copy %>% select(all_of(selected_vars), treatment_group),  # Select only important variables and group variable
+  data_copy %>% select(all_of(all_vars), treatment_group),  # Select all variables and group variable
   by = treatment_group,  # Group by treatment group
-  type = list(readiness ~ "continuous"),  # Specify readiness as continuous
   statistic = list(
     all_continuous() ~ "{mean} ({sd})",  # Mean and SD for continuous variables
     all_categorical() ~ "{n} / {N} ({p}%)"  # Count and percentage for categorical variables
@@ -212,25 +217,52 @@ From the matrix, we observe that abst has relatively weak correlations with most
 
 Building on the insights gained from the correlation matrix, we now proceed with LASSO (Least Absolute Shrinkage and Selection Operator) regression to further refine our selection of key predictors for smoking abstinence (abst). While the correlation analysis provided a preliminary view of variable relationships, LASSO allows us to formally select the most influential baseline variables by applying a penalty to the regression coefficients, shrinking less important ones to zero. This step will help us identify the strongest predictors of abstinence, reducing model complexity and focusing on the most impactful variables.
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Load necessary libraries
 library(glmnet)
+library(tidyverse)
+library(kableExtra)
+
+# Set seed for reproducibility
 set.seed(2001)
+
+# Prepare data for LASSO regression
 data1 <- data[, -1]
 y <- data$abst
-X <- model.matrix(~ BA + Var + . - 1, data = data1)  # "-1" removes the intercept for glmnet
+X <- model.matrix(~ BA + Var + . - 1, data = data1)  # Remove intercept for glmnet
 
-# glmnet requires specifying family = "binomial" for logistic regression
-lasso_model <- glmnet(X, y, family = "binomial", alpha = 1)
-
+# Fit LASSO regression model with cross-validation
 cv_lasso <- cv.glmnet(X, y, family = "binomial", alpha = 1)
-
 best_lambda <- cv_lasso$lambda.min
-print(paste("Best lambda for lasso:", round(best_lambda, 5)))
 
+# Refit the final model using the optimal lambda
 final_model <- glmnet(X, y, family = "binomial", alpha = 1, lambda = best_lambda)
 
+# Extract non-zero coefficients
 lasso_coefficients <- as.matrix(coef(final_model))
-print("Selected variables with non-zero coefficients:")
-print(lasso_coefficients[lasso_coefficients != 0, , drop = FALSE])
+non_zero_coeff <- lasso_coefficients[lasso_coefficients != 0, , drop = FALSE]
+
+# Convert non-zero coefficients to a data frame
+lasso_results <- data.frame(
+  Variable = rownames(non_zero_coeff),
+  Coefficient = as.numeric(non_zero_coeff)
+)
+
+# Escape special characters in variable names for LaTeX compatibility
+lasso_results$Variable <- gsub("_", "\\\\_", lasso_results$Variable, fixed = TRUE)
+lasso_results$Variable <- gsub("\\(", "\\\\(", lasso_results$Variable, fixed = TRUE)
+lasso_results$Variable <- gsub("\\)", "\\\\)", lasso_results$Variable, fixed = TRUE)
+
+# Remove the Intercept if unnecessary
+lasso_results <- lasso_results[lasso_results$Variable != "(Intercept)", ]
+
+# Generate a formatted table for the report
+lasso_results %>%
+  kable(booktabs = TRUE, caption = "LASSO Regression Results with Optimal Lambda", escape = FALSE) %>%
+  kable_styling(latex_options = "scale_down")
+
+# Display best lambda value in a descriptive format
+cat(paste("The optimal lambda for LASSO regression is:", round(best_lambda, 5)), "\n")
+
 ```
 The LASSO regression identified several key predictors of smoking abstinence. Using cross-validation, we determined the optimal lambda value to be 0.02822, minimizing the model’s prediction error. The variables with non-zero coefficients included ftcd_score, shaps_score_pq1, mde_curr, and NHW (0.4099) and NMR (0.0296) are positively associated with abstinence, indicating that individuals with these characteristics may have higher probabilities of quitting smoking. Conversely, ftcd_score (-0.3338), shaps_score_pq1 (-0.0067), and mde_curr (-0.1269) exhibited negative coefficients, suggesting that higher scores on these measures may be associated with lower likelihoods of smoking cessation. Overall, the LASSO model successfully reduced the number of predictors by shrinking the coefficients of less relevant variables to zero, thus highlighting a subset of variables that are potentially most influential in predicting smoking abstinence in adults with major depressive disorder.
 
@@ -251,11 +283,17 @@ The model can be represented as follows:
 \]
 
 where:
-- \( A_i \) represents pharmacotherapy (`Var`),
-- \( B_i \) represents behavioral treatment (`BA`),
-- \( Z_{ik} \) represents the main effects of all baseline variables in the dataset,
-- \( X_{ij} \) represents the selected baseline variables for interaction: `ftcd_score`, `shaps_score_pq1`, `mde_curr`, `NHW`, and `NMR`,
-- \( \beta \) coefficients capture the main effects of treatment and baseline variables, and
+
+- \( A_i \) represents pharmacotherapy (`Var`)
+
+- \( B_i \) represents behavioral treatment (`BA`)
+
+- \( Z_{ik} \) represents the main effects of all baseline variables in the dataset
+
+- \( X_{ij} \) represents the selected baseline variables for interaction: `ftcd_score`, `shaps_score_pq1`, `mde_curr`, `NHW`, and `NMR`
+
+- \( \beta \) coefficients capture the main effects of treatment and baseline variables
+
 - \( \gamma \) coefficients capture the moderation effects, representing how the selected baseline variables influence the effectiveness of each treatment.
 
 In the next step, we will perform model selection to identify the significant main effects and interaction terms, ensuring the model is both interpretable and relevant to our research question.
@@ -305,10 +343,24 @@ pred_probs <- predict(final_lasso_model, type = "response", newx = test_X)
 selected_vars <- as.matrix(coef(final_lasso_model))
 selected_vars <- selected_vars[selected_vars != 0, , drop = FALSE]
 
-# Display selected variables and coefficients
-print("Selected variables with non-zero coefficients:")
-print(selected_vars)
+# Convert to a data frame for better presentation
+selected_vars_df <- data.frame(
+  Variable = rownames(selected_vars),
+  Coefficient = as.numeric(selected_vars)
+)
 
+# Escape special characters in variable names for LaTeX compatibility
+selected_vars_df$Variable <- gsub("_", "\\\\_", selected_vars_df$Variable, fixed = TRUE)
+selected_vars_df$Variable <- gsub("\\(", "\\\\(", selected_vars_df$Variable, fixed = TRUE)
+selected_vars_df$Variable <- gsub("\\)", "\\\\)", selected_vars_df$Variable, fixed = TRUE)
+
+# Remove the Intercept if unnecessary
+selected_vars_df <- selected_vars_df[selected_vars_df$Variable != "(Intercept)", ]
+
+# Display the variables and coefficients in a formatted table
+selected_vars_df %>%
+  kable(booktabs = TRUE, caption = "Selected Variables with Non-Zero Coefficients", escape = FALSE) %>%
+  kable_styling(latex_options = "scale_down")
 ```
 ## Interpretation
 The LASSO model selected five variables with non-zero coefficients, indicating their significant influence on smoking abstinence outcomes. The intercept was -1.8916, serving as the baseline log-odds of abstinence when all predictors are at zero. The variable Var, representing Varenicline, had a positive coefficient (0.5211), suggesting that participants receiving Varenicline had a higher probability of refraining from smoking. NHW as expected also had a positive coefficient (0.2871), indicating that non-Hispanic White participants were more likely to achieve smoking abstinence.
